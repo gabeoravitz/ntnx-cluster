@@ -1,7 +1,14 @@
 import subprocess
 import ipaddress
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import os  # For clearing the screen
+import sys
+import termios
+import tty
+import select  # For non-blocking input checking
 from colorama import Fore, Style, init
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Initialize colorama for cross-platform compatibility
 init(autoreset=True)
@@ -9,6 +16,9 @@ init(autoreset=True)
 # Set your IPMI credentials here
 IPMI_USER = "ADMIN"         # Username for IPMI access
 IPMI_PASSWORD = "ADMIN"     # Password for IPMI access
+
+PASTEL_PINK = "\033[38;5;207m"  # Define pastel pink color
+RESET_COLOR = "\033[0m"  # Reset to default terminal color
 
 def run_ipmitool_command(ip, command):
     """Runs an ipmitool command for a specific IP address and returns the output."""
@@ -22,24 +32,42 @@ def run_ipmitool_command(ip, command):
     except Exception as e:
         return f"{Fore.RED}Exception occurred on {ip}: {str(e)}"
 
-def run_custom_bash_command(ip):
-    """Runs the custom bash command with the current IP address, user, and password."""
-    custom_command = f"ipmitool -H {ip} -U {IPMI_USER} -P {IPMI_PASSWORD} raw 0x30 0x70 0x66 0x01 0x00 0x15"
-    try:
-        result = subprocess.run(custom_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            return f"{Fore.GREEN}Custom slow fan mode command executed successfully on {ip}:\n{result.stdout.decode('utf-8')}"
-        else:
-            return f"{Fore.RED}Error executing custom slow command on {ip}: {result.stderr.decode('utf-8')}"
-    except Exception as e:
-        return f"{Fore.RED}Exception occurred while running custom bash command on {ip}: {str(e)}"
+def get_temperature_color(temp_value):
+    """Return a color based on the temperature range."""
+    return PASTEL_PINK  # Use pastel pink for all temperatures
 
-def get_power_status(ip):
-    """Get power status using IPMI for a specific IP."""
-    return run_ipmitool_command(ip, "chassis power status")
+def parse_temperature(temp_str):
+    """Extract temperature value from a string using regex and convert to int."""
+    temp_match = re.search(r"(\d+)\s*degrees", temp_str)
+    if temp_match:
+        try:
+            return int(temp_match.group(1))  # Return temperature value
+        except (IndexError, ValueError):
+            return None
+    return None
+
+def parse_fan_speed(fan_str):
+    """Extract fan speed value from a string using regex and convert to int."""
+    fan_match = re.search(r"(\d+)\s*RPM", fan_str)
+    if fan_match:
+        try:
+            return int(fan_match.group(1))  # Return fan speed value
+        except (IndexError, ValueError):
+            return None
+    return None
+
+def check_power_status(ip):
+    """Check if the node is powered on or off."""
+    power_status = run_ipmitool_command(ip, "chassis power status")
+    if "off" in power_status.lower():
+        return False
+    return True
 
 def get_cpu_temps(ip):
     """Get CPU1 and CPU2 temperatures using IPMI for a specific IP and format the output."""
+    if not check_power_status(ip):
+        return f"{Fore.RED}Node Powered Off"
+
     output = run_ipmitool_command(ip, "sdr type temperature")
     cpu_temps = {}
     for line in output.splitlines():
@@ -51,103 +79,147 @@ def get_cpu_temps(ip):
     if not cpu_temps:
         return f"{Fore.RED}CPU1 and CPU2 temperatures not found."
 
-    # Pretty formatting for CPU temperature display
-    formatted_output = f"{Fore.CYAN}CPU Temperature Readings:\n"
-    formatted_output += f"  {Fore.GREEN}{'CPU1':<10}: {cpu_temps.get('CPU1', 'Not Available')}\n"
-    formatted_output += f"  {Fore.GREEN}{'CPU2':<10}: {cpu_temps.get('CPU2', 'Not Available')}\n"
+    # Simplified formatting for CPU temperature display with pastel pink
+    formatted_output = ""
+    
+    for cpu_label, temp_info in cpu_temps.items():
+        temp_value = parse_temperature(temp_info)
+        if temp_value is not None:
+            temp_color = get_temperature_color(temp_value)
+            formatted_output += f"{Fore.GREEN}{cpu_label:<10}: {temp_color}{temp_value} Celsius{RESET_COLOR}\n"
+        else:
+            formatted_output += f"{Fore.RED}{cpu_label:<10}: No Valid Temp\n"
+    
     return formatted_output
 
 def get_fan_speeds(ip):
-    """Get fan speeds using IPMI for a specific IP, only showing those with RPM."""
+    """Get FAN1 and FAN2 fan speeds using IPMI for a specific IP and format the output."""
+    if not check_power_status(ip):
+        return f"{Fore.RED}Node Powered Off"
+
     output = run_ipmitool_command(ip, "sdr type fan")
-    fan_speeds = []
+    fan_speeds = {}
     for line in output.splitlines():
-        if "RPM" in line:  # Match fan speeds that end with "RPM"
-            fan_speeds.append(line.strip())
+        if "FAN1" in line or "Fan 1" in line:
+            fan_speeds['FAN1'] = line.strip()
+        elif "FAN2" in line or "Fan 2" in line:
+            fan_speeds['FAN2'] = line.strip()
     
     if not fan_speeds:
-        return f"{Fore.RED}No fan speed sensors found."
+        return f"{Fore.RED}FAN1 and FAN2 fan speeds not found."
 
-    # Pretty formatting for Fan Speed display
-    formatted_output = f"{Fore.CYAN}Fan Speed Readings:\n"
-    for fan in fan_speeds:
-        formatted_output += f"  {Fore.GREEN}{fan}\n"
+    # Simplified formatting for Fan Speed display with pastel pink
+    formatted_output = ""
+    
+    for fan_label, fan_info in fan_speeds.items():
+        fan_speed = parse_fan_speed(fan_info)
+        if fan_speed is not None:
+            formatted_output += f"{Fore.GREEN}{fan_label:<10}: {PASTEL_PINK}{fan_speed} RPM{RESET_COLOR}\n"
+        else:
+            formatted_output += f"{Fore.RED}{fan_label:<10}: No Valid Fan Speed\n"
+    
     return formatted_output
 
-def control_power(ip, action):
-    """Control server power (on, off, reset, cycle) using IPMI for a specific IP."""
-    return run_ipmitool_command(ip, f"chassis power {action}")
-
-def set_fan_mode(ip, mode):
-    """Set the fan mode (auto) for a specific IP."""
-    if mode == "auto":
-        return run_ipmitool_command(ip, "raw 0x30 0x30 0x01 0x01")  # Automatic mode
-    else:
-        return f"{Fore.RED}Invalid fan mode specified."
-
-def gather_status_in_parallel(ip_list, status_func):
-    """Gather server statuses in parallel and return the results."""
-    results = []
-    
+def fetch_data_in_parallel(ip_list, status_func):
+    """Fetch data (temperature, fan speeds, power) from servers in parallel."""
+    results = {}
     with ThreadPoolExecutor(max_workers=len(ip_list)) as executor:
-        # Submit all tasks to be run in parallel
-        future_to_ip = {executor.submit(status_func, ip): ip for ip in ip_list}
-        
-        # As each task completes, retrieve its result
-        for future in as_completed(future_to_ip):
-            ip = future_to_ip[future]
+        futures = {executor.submit(status_func, ip): ip for ip in ip_list}
+        for future in as_completed(futures):
+            ip = futures[future]
             try:
-                result = future.result()
-                results.append(f"{Fore.CYAN}{ip}: {result}")
+                results[ip] = future.result()
             except Exception as e:
-                results.append(f"{Fore.RED}Error fetching status for {ip}: {e}")
-    
+                results[ip] = f"{Fore.RED}Error occurred: {str(e)}"
     return results
 
-def perform_action_in_parallel(ip_list, action, action_func):
-    """Perform an action on all servers in parallel."""
-    results = []
-    with ThreadPoolExecutor(max_workers=len(ip_list)) as executor:
-        future_to_ip = {executor.submit(action_func, ip, action): ip for ip in ip_list}
-        for future in as_completed(future_to_ip):
-            ip = future_to_ip[future]
-            try:
-                result = future.result()
-                results.append(f"{Fore.GREEN}Result for {ip}: {result}")
-            except Exception as e:
-                results.append(f"{Fore.RED}Error performing action for {ip}: {e}")
-    return results
+def display_real_time_output(ip_list, status_func, description):
+    """Displays real-time output for CPU temperatures or fan speeds, refreshing every 2 seconds."""
+    previous_lines = 0
 
-def perform_fan_mode_control(ip_list):
-    """Ask for fan mode (auto/slow) and set it on all servers."""
-    mode = input(f"{Fore.GREEN}Enter fan mode ('auto' or 'slow'): ").strip().lower()
-    if mode == 'auto':
-        print(f"{Fore.CYAN}Setting fan mode to auto on all servers...")
-        results = perform_action_in_parallel(ip_list, mode, set_fan_mode)
-        for result in results:
-            print(result)
-            print("-" * 40)
-    elif mode == 'slow':
-        print(f"{Fore.CYAN}Setting fan mode to slow...")
-        # Execute the custom bash command for 'slow' for each IP in the list
-        for ip in ip_list:
-            print(run_custom_bash_command(ip))
-            print("-" * 40)
-    else:
-        print(f"{Fore.RED}Invalid fan mode input. Please enter 'auto' or 'slow'.")
+    # Sort the IP list by the last octet for consistent output order
+    sorted_ip_list = sorted(ip_list, key=lambda ip: int(ip.split('.')[-1]))
+
+    # Print the static header once
+    print(f"{Fore.CYAN}Real-Time {description} Readings\n")
+    print(f"Press CTRL-C to return to the menu.\n")
+
+    try:
+        while True:
+            # Move the cursor up to the previous data block and overwrite it
+            if previous_lines > 0:
+                sys.stdout.write(f"\033[{previous_lines}F")  # Move cursor to the top of previous output
+            
+            # Fetch data in parallel
+            results = fetch_data_in_parallel(sorted_ip_list, status_func)
+            
+            # Print new output and count the number of lines printed
+            previous_lines = 0  # Reset line counter
+            for ip in sorted_ip_list:  # Ensure the order is maintained during output
+                result = results[ip]  # Print the result in the same order as sorted IPs
+                sys.stdout.write(f"{Fore.CYAN}{ip}:\n")
+                sys.stdout.write(result + "\n")
+                sys.stdout.write("-" * 40 + "\n")
+                previous_lines += result.count('\n') + 3  # Each block has 3 lines (header, content, divider)
+            
+            time.sleep(2)  # Refresh every 2 seconds
+
+    except KeyboardInterrupt:
+        pass  # Handle CTRL-C gracefully
+
+    # Clear screen before returning to the menu
+    os.system('clear')
 
 def show_menu():
     """Display the action menu and return the selected option."""
     print(f"{Fore.CYAN}\nMenu:")
     print(f"{Fore.YELLOW}1. View Server Power Status")
-    print(f"{Fore.YELLOW}2. View Server Temperatures (CPU1 and CPU2)")
-    print(f"{Fore.YELLOW}3. View Server Fan Speeds")
+    print(f"{Fore.YELLOW}2. View Real-Time Server Temperatures (CPU1 and CPU2)")
+    print(f"{Fore.YELLOW}3. View Real-Time Server Fan Speeds")
     print(f"{Fore.YELLOW}4. Power Action (on, off, reset, cycle)")
-    print(f"{Fore.YELLOW}5. Set Fan Mode (auto/slow)")  # Updated fan mode control
-    print(f"{Fore.YELLOW}6. Exit")
+    print(f"{Fore.YELLOW}5. Exit")
     
     choice = input(f"{Fore.GREEN}Select an option: ").strip()
     return choice
+
+def main():
+    ip_range_str = input(f"{Fore.GREEN}Enter the IP range (e.g., 192.168.1.100-105, 192.168.1.108-110): ")
+    
+    try:
+        ip_list = get_ip_range_from_string(ip_range_str)
+        if not ip_list:
+            print(f"{Fore.RED}No valid IP addresses found in the range.")
+            return
+    except Exception as e:
+        print(f"{Fore.RED}Error parsing IP range: {e}")
+        return
+
+    while True:
+        choice = show_menu()
+
+        if choice == '1':
+            # View server power status
+            print(f"{Fore.CYAN}Gathering power status in parallel...")
+            results = fetch_data_in_parallel(ip_list, check_power_status)
+            for ip, result in results.items():
+                status = "ON" if result else "OFF"
+                print(f"{Fore.CYAN}{ip}: {status}")
+                print("-" * 40)
+
+        elif choice == '2':
+            # View real-time server temperatures for CPU1 and CPU2 using a Python loop
+            display_real_time_output(ip_list, get_cpu_temps, "CPU Temperature")
+
+        elif choice == '3':
+            # View real-time server fan speeds using a Python loop
+            display_real_time_output(ip_list, get_fan_speeds, "Fan Speed")
+
+        elif choice == '5':
+            print(f"{Fore.CYAN}Exiting...")
+            break
+
+        else:
+            print(f"{Fore.RED}Invalid option. Please select a valid option.")
 
 def get_ip_range_from_string(ip_range_str):
     """Parse an IP range string and return a list of IP addresses."""
@@ -169,68 +241,6 @@ def get_ip_range_from_string(ip_range_str):
             ip_list.append(ip_range.strip())
     
     return ip_list
-
-def main():
-    ip_range_str = input(f"{Fore.GREEN}Enter the IP range (e.g., 192.168.1.100-105, 192.168.1.108-110): ")
-    
-    try:
-        ip_list = get_ip_range_from_string(ip_range_str)
-        if not ip_list:
-            print(f"{Fore.RED}No valid IP addresses found in the range.")
-            return
-    except Exception as e:
-        print(f"{Fore.RED}Error parsing IP range: {e}")
-        return
-
-    while True:
-        choice = show_menu()
-
-        if choice == '1':
-            # View server power status
-            print(f"{Fore.CYAN}Gathering power status in parallel...")
-            statuses = gather_status_in_parallel(ip_list, get_power_status)
-            for status in statuses:
-                print(status)
-                print("-" * 40)
-
-        elif choice == '2':
-            # View server temperatures for CPU1 and CPU2
-            print(f"{Fore.CYAN}Gathering CPU1 and CPU2 temperature data in parallel...")
-            statuses = gather_status_in_parallel(ip_list, get_cpu_temps)
-            for status in statuses:
-                print(status)
-                print("-" * 40)
-
-        elif choice == '3':
-            # View server fan speeds
-            print(f"{Fore.CYAN}Gathering fan speed data in parallel...")
-            statuses = gather_status_in_parallel(ip_list, get_fan_speeds)
-            for status in statuses:
-                print(status)
-                print("-" * 40)
-
-        elif choice == '4':
-            # Perform power action
-            action = input(f"{Fore.GREEN}Enter power action (on, off, reset, cycle): ").strip().lower()
-            if action in ['on', 'off', 'reset', 'cycle']:
-                print(f"{Fore.CYAN}Performing power action '{action}' on all servers...")
-                results = perform_action_in_parallel(ip_list, action, control_power)
-                for result in results:
-                    print(result)
-                    print("-" * 40)
-            else:
-                print(f"{Fore.RED}Invalid power action. Please try again.")
-
-        elif choice == '5':
-            # Set fan mode (auto/slow)
-            perform_fan_mode_control(ip_list)
-
-        elif choice == '6':
-            print(f"{Fore.CYAN}Exiting...")
-            break
-
-        else:
-            print(f"{Fore.RED}Invalid option. Please select a valid option.")
 
 if __name__ == "__main__":
     main()
