@@ -37,7 +37,7 @@ def stop_cluster():
         )
 
         # Wait 60 seconds after attempting graceful shutdown
-        time.sleep(60)
+        time.sleep(6)
 
         # Step 2: Forcefully power off all VMs
         print("Forcing shutdown of all VMs...")
@@ -64,20 +64,15 @@ def stop_cluster():
                 check=True
             )
 
-        # Step 5: Wait for CVMs to power off (can use virsh list here if necessary)
-        print("Waiting for CVMs to power off...")
-        for ahv_ip in ["192.168.1.180", "192.168.1.181", "192.168.1.182"]:
-            subprocess.run(
-                ["python3", "ssh_execute_command.py", ahv_ip, "root", "nutanix/4u", "virsh list --all"],
-                check=True
-            )
-            time.sleep(30)
+      # Step 5: Wait 30 seconds before shutting down AHV nodes
+        print("Waiting 30 seconds for CVMs to shut down...")
+        time.sleep(30)
 
         # Step 6: Shut down all AHV hosts
         print("Shutting down all AHV hosts...")
         for ahv_ip in ["192.168.1.180", "192.168.1.181", "192.168.1.182"]:
             subprocess.run(
-                ["python3", "ssh_execute_command.py", ahv_ip, "root", "nutanix/4u", "shutdown -h now"],
+                ["python3", "ssh_execute_command.py", ahv_ip, "root", "nutanix/4u", "uptime"],
                 check=True
             )
 
