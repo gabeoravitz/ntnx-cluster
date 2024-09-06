@@ -55,6 +55,7 @@ def stop_cluster():
             ["python3", "ssh_execute_command.py", "192.168.1.184", "nutanix", "nutanix/4u", "/usr/local/nutanix/cluster/bin/cluster stop", "I agree"],
             check=True
         )
+         time.sleep(10)
 
         # Step 4: Shut down all CVMs
         print("Shutting down all CVMs...")
@@ -72,7 +73,7 @@ def stop_cluster():
         print("Shutting down all AHV hosts...")
         for ahv_ip in ["192.168.1.180", "192.168.1.181", "192.168.1.182"]:
             subprocess.run(
-                ["python3", "ssh_execute_command.py", ahv_ip, "root", "nutanix/4u", "uptime"],
+                ["python3", "ssh_execute_command.py", ahv_ip, "root", "nutanix/4u", "shutdown -h now"],
                 check=True
             )
 
