@@ -120,6 +120,28 @@ def get_fan_speeds(ip):
     
     return formatted_output
 
+def power_action(ip, action):
+    """Perform power actions (on, off, reset, cycle) on a specific server."""
+    power_commands = {
+        'on': 'chassis power on',
+        'off': 'chassis power off',
+        'reset': 'chassis power reset',
+        'cycle': 'chassis power cycle'
+    }
+    
+    if action in power_commands:
+        result = run_ipmitool_command(ip, power_commands[action])
+        return result.strip()
+    else:
+        return f"{Fore.RED}Invalid power action"
+
+def perform_power_action(ip_list, action):
+    """Perform the selected power action on all servers in parallel."""
+    results = fetch_data_in_parallel(ip_list, lambda ip: power_action(ip, action))
+    for ip, result in results.items():
+        print(f"{Fore.CYAN}{ip}: {result}")
+        print("-" * 40)
+
 def fetch_data_in_parallel(ip_list, status_func):
     """Fetch data (temperature, fan speeds, power) from servers in parallel."""
     results = {}
@@ -213,6 +235,27 @@ def main():
         elif choice == '3':
             # View real-time server fan speeds using a Python loop
             display_real_time_output(ip_list, get_fan_speeds, "Fan Speed")
+
+        elif choice == '4':
+            # Power action menu
+            print(f"{Fore.YELLOW}Select a power action:")
+            print(f"{Fore.CYAN}1. Power On")
+            print(f"{Fore.CYAN}2. Power Off")
+            print(f"{Fore.CYAN}3. Power Reset")
+            print(f"{Fore.CYAN}4. Power Cycle")
+            power_choice = input(f"{Fore.GREEN}Select an option: ").strip()
+
+            power_actions = {
+                '1': 'on',
+                '2': 'off',
+                '3': 'reset',
+                '4': 'cycle'
+            }
+
+            if power_choice in power_actions:
+                perform_power_action(ip_list, power_actions[power_choice])
+            else:
+                print(f"{Fore.RED}Invalid option.")
 
         elif choice == '5':
             print(f"{Fore.CYAN}Exiting...")
