@@ -24,15 +24,20 @@ def ssh_execute_command(ip, user, password, command, send_input=None):
         time.sleep(5)
         shell.send(f"{send_input}\n")
 
-    # Capture the final output, but minimize displayed output
+    # Capture the final output and any errors, but minimize displayed output
     time.sleep(2)  # Give it time to finish execution
     output = shell.recv(10000).decode("utf-8")
+    
+    # Capture any errors from stderr
+    errors = ""
+    if shell.recv_stderr_ready():
+        errors = shell.recv_stderr(10000).decode("utf-8")
 
     # Close the connection
     ssh.close()
 
-    # Optionally print a minimal output or return it
-    return output.strip()
+    # Return both output and errors
+    return output.strip(), errors.strip()
 
 if __name__ == "__main__":
     ip = sys.argv[1]
@@ -41,8 +46,10 @@ if __name__ == "__main__":
     command = sys.argv[4]
     send_input = sys.argv[5] if len(sys.argv) > 5 else None
 
-    output = ssh_execute_command(ip, user, password, command, send_input)
+    output, errors = ssh_execute_command(ip, user, password, command, send_input)
     
     # Display output only if necessary
     if output:
         print(output)
+    if errors:
+        print(f"Error: {errors}")

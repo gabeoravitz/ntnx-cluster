@@ -11,12 +11,19 @@ def start_cluster():
         # Step 2: Wait for CVMs to be reachable via ping
         print("Waiting for CVMs to be reachable via ping...")
         subprocess.run(["python3", "wait_for_cvm_ping.py"], check=True)
+        
+        # Step 3: Start the cluster
+        print("Starting the cluster...")
+        subprocess.run(
+            ["python3", "ssh_execute_command.py", "192.168.1.184", "nutanix", "nutanix/4u", "/usr/local/nutanix/cluster/bin/cluster start"],
+            check=True
+        )
 
-        # Step 3: Wait for the cluster to be fully operational
+        # Step 4: Wait for the cluster to be fully operational
         print("Waiting for the cluster to be fully operational...")
         subprocess.run(["python3", "wait_for_cluster_running.py"], check=True)
 
-        # Step 4: Power on all VMs
+        # Step 5: Power on all VMs
         print("Powering on all VMs...")
         subprocess.run(
             ["python3", "ssh_execute_command.py", "192.168.1.184", "nutanix", "nutanix/4u", "/usr/local/nutanix/bin/acli vm.on '*'"],
