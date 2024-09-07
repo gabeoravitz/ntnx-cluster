@@ -1,0 +1,36 @@
+---
+- name: Nutanix Cluster Power On, Cluster Start, and VM Start
+  hosts: localhost
+  tasks:
+    # Step 1: Power on AHV Nodes via IPMI
+    - name: Power on AHV Node 1 via IPMI
+      shell: |
+        ipmitool -I lanplus -H 192.168.1.224 -U ADMIN -P ADMIN chassis power on
+      ignore_errors: yes
+
+    - name: Power on AHV Node 2 via IPMI
+      shell: |
+        ipmitool -I lanplus -H 192.168.1.225 -U ADMIN -P ADMIN chassis power on
+      ignore_errors: yes
+
+    - name: Power on AHV Node 3 via IPMI
+      shell: |
+        ipmitool -I lanplus -H 192.168.1.226 -U ADMIN -P ADMIN chassis power on
+      ignore_errors: yes
+
+    # Optional: Add a delay to allow AHV nodes to fully power on
+    - name: Wait for 5 minutes for CVMs to be up
+      pause:
+        minutes: 5
+
+    # Step 2: Start the Nutanix Cluster
+    - name: Start the Nutanix cluster on CVM 1
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/cluster/bin/cluster start"
+      ignore_errors: yes
+
+    # Step 3: Power on All VMs
+    - name: Start all VMs on the cluster
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/bin/acli vm.on '*'"
+      ignore_errors: yes
