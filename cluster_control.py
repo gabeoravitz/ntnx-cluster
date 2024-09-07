@@ -37,7 +37,7 @@ def stop_cluster():
         )
 
         # Wait 60 seconds after attempting graceful shutdown
-         time.sleep(6)
+        time.sleep(60)
 
         # Step 2: Forcefully power off all VMs
         print("Forcing shutdown of all VMs...")
