@@ -16,7 +16,7 @@
     # Step 5: Stop the Nutanix Cluster and respond with "I agree" in the same session
     - name: Stop the cluster
       shell: |
-        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/cluster/bin/cluster stop"
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/home/nutanix/stop.sh"
       ignore_errors: yes
 
     # Step 6: Shutdown the CVMs
