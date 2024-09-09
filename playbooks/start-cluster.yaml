@@ -23,11 +23,16 @@
       pause:
         minutes: 5
 
-    # Step 2: Start the Nutanix Cluster
-   # - name: Start the Nutanix cluster on CVM 1
-    #  shell: |
-    #    sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/cluster/bin/cluster start"
-    #  ignore_errors: yes
+    # Step 2: Start the cluster
+    - name: Start the cluster
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/cluster/bin/cluster start"
+      ignore_errors: yes
+
+    # Wait for 15 seconds for cluster to be ready
+    - name: Wait for 15 seconds for the cluster to be ready
+      pause:
+        seconds: 15
 
     # Step 3: Power on All VMs
     - name: Start all VMs on the cluster
