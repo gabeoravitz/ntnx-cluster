@@ -39,3 +39,9 @@
       shell: |
         sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/bin/acli vm.on '*'"
       ignore_errors: yes
+      
+      # Step 2: Start Prism Central services
+      27   │     - name: Start the cluster
+      28   │       shell: |
+      29   │         sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.242 "/usr/local/nutanix/cluster/bin/cluster start"
+      30   │       ignore_errors: yes
