@@ -1,0 +1,43 @@
+---
+- name: Nutanix Cluster Shutdown Process
+  hosts: localhost
+  tasks:
+   
+       # Stop the Stop Prism Central (requires modified cluster command to allow no prompt)
+    - name: Stop Prism Central services
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.242 "/home/nutanix/stop.sh"
+      ignore_errors: yes
+      
+          # Wait 10 seconds for Prism Central processes to stop
+    - name: Wait for 10 seconds for PC processes to stop
+      pause:
+        seconds: 10
+      
+   # Shutdown all VMs on the cluster
+    - name: Initiate ACPI shutdown for all VMs
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/bin/acli vm.shutdown '*'"
+      ignore_errors: yes
+
+    # Optional: Wait for 60 seconds to ensure VMs are shut down
+    - name: Wait for 60 seconds for VMs to shut down
+      pause:
+        seconds: 60
+
+   # Shutdown all VMs on the cluster
+    - name: Force power off remaining VMs
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/bin/acli vm.off '*'"
+      ignore_errors: yes
+
+    # Step 5: Stop the Nutanix Cluster (requires modified cluster command to allow no prompt)
+    - name: Stop the cluster
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/home/nutanix/stop.sh"
+      ignore_errors: yes
+
+    # Wait for 15 seconds for cluster to stop
+    - name: Wait for 15 seconds for the cluster to stop
+      pause:
+        seconds: 15
