@@ -17,6 +17,11 @@
       shell: |
         ipmitool -I lanplus -H 192.168.1.226 -U ADMIN -P ADMIN chassis power on
       ignore_errors: yes
+    
+    - name: Power on AHV Node 4 via IPMI
+      shell: |
+        ipmitool -I lanplus -H 192.168.1.227 -U ADMIN -P ADMIN chassis power on
+      ignore_errors: yes
 
     # Optional: Add a delay to allow AHV nodes to fully power on
     - name: Wait for 5 minutes for CVMs to be up
@@ -39,6 +44,11 @@
       shell: |
         sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.184 "/usr/local/nutanix/bin/acli vm.on '*'"
       ignore_errors: yes
+
+      # Wait for 15 seconds for cluster to be ready
+    - name: Wait for 12 seconds for the cluster to be ready
+      pause:
+        seconds: 120
       
       # Step 2: Start Prism Central services
     - name: Start Prism Central

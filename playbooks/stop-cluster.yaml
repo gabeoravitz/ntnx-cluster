@@ -60,6 +60,12 @@
         sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.186 "sudo shutdown -h now"
       ignore_errors: yes
       no_log: yes
+      
+    - name: Shutdown CVM on Node 3
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no nutanix@192.168.1.187 "sudo shutdown -h now"
+      ignore_errors: yes
+      no_log: yes
 
     # Optional: Wait for 30 seconds after CVMs shutdown
     - name: Wait for 30 seconds after shutting down CVMs
@@ -82,5 +88,11 @@
     - name: Shutdown AHV Host on Node 3
       shell: |
         sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no root@192.168.1.182 "shutdown -h now"
+      ignore_errors: yes
+      no_log: yes
+      
+    - name: Shutdown AHV Host on Node 3
+      shell: |
+        sshpass -p "nutanix/4u" ssh -o StrictHostKeyChecking=no root@192.168.1.183 "shutdown -h now"
       ignore_errors: yes
       no_log: yes
